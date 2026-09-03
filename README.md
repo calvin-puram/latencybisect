@@ -10,8 +10,8 @@ The hard part isn't spotting slow spans. It's that a slow leaf makes every one o
 
 Compare **self time** (a span's duration minus its children's), not total duration.
 
-- Total duration regressed → this span *or anything beneath it* got slower.
-- Self time regressed → *this span's own work* got slower.
+- Total duration regressed  this span *or anything beneath it* got slower.
+- Self time regressed  *this span's own work* got slower.
 
 Only the second is causal. Ancestors whose duration grew but whose self time held flat are collateral, and get reported as such instead of as suspects.
 
@@ -34,7 +34,7 @@ compared 300 before traces against 300 after traces
 
 ## How it works
 
-1. **Match spans across samples.** Span and trace IDs are unique per request, so they can't identify "the same operation" in two different traces. The key is the root-to-node path of span names: `checkout>inventory.check>db.query`. Using the full path rather than the bare name matters because the same operation often appears in several places in a call graph, and `cache.get` under `pricing` is not `cache.get` under `inventory` — averaging them together smears a real regression into noise.
+1. **Match spans across samples.** Span and trace IDs are unique per request, so they can't identify "the same operation" in two different traces. The key is the root-to-node path of span names: `checkout>inventory.check>db.query`. Using the full path rather than the bare name matters because the same operation often appears in several places in a call graph, and `cache.get` under `pricing` is not `cache.get` under `inventory`  averaging them together smears a real regression into noise.
 
 2. **Build per-position distributions.** Each path accumulates one self-time observation per trace. Raw samples are kept rather than running means, because plenty of real regressions are distributional: a span going from a steady 5ms to a bimodal 5ms/200ms barely moves the mean but is very much a problem.
 
@@ -76,11 +76,11 @@ Input is a JSON array of traces:
 ]}]
 ```
 
-This is a deliberate simplification of the OpenTelemetry export format — same fields that matter (span id, parent, name, start/end unix nanos), without the `resourceSpans`/`scopeSpans` nesting. Real backends get an adapter rather than a schema rewrite.
+This is a deliberate simplification of the OpenTelemetry export format  same fields that matter (span id, parent, name, start/end unix nanos), without the `resourceSpans`/`scopeSpans` nesting. Real backends get an adapter rather than a schema rewrite.
 
 ## Testing
 
-Correctness is checked against synthetic traces with a known culprit. `internal/synth` builds traces bottom-up from per-span self-time distributions and lays children out sequentially, so the self time recovered from timestamps equals the self time injected — the ground truth is real, not circular.
+Correctness is checked against synthetic traces with a known culprit. `internal/synth` builds traces bottom-up from per-span self-time distributions and lays children out sequentially, so the self time recovered from timestamps equals the self time injected  the ground truth is real, not circular.
 
 ```sh
 go test ./...
