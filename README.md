@@ -1,4 +1,4 @@
-# latencybisect
+# Latency Bisect
 
 Finds which span in a distributed trace is responsible for a latency regression.
 
