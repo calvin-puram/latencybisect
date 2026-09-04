@@ -2,8 +2,6 @@
 
 Finds which span in a distributed trace caused a latency regression.
 
-P99 went from 120ms to 340ms after a deploy. The graph won't tell you which of the twenty spans in the request did it, and a slow leaf makes every one of its ancestors look slow too, so a naive diff blames all three levels.
-
 ## The insight
 
 Compare **self time** (a span's duration minus the time its children actually cover), not total duration.
