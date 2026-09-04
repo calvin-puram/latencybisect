@@ -2,6 +2,7 @@ package trace
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -62,14 +63,52 @@ func (n *Node) PathKey() string {
 }
 
 func (n *Node) SelfTime() int64 {
-	self := n.Span.Duration()
-	for _, c := range n.Children {
-		self -= c.Span.Duration()
-	}
+	self := n.Span.Duration() - n.childCoverage()
 	if self < 0 {
 		return 0
 	}
 	return self
+}
+
+func (n *Node) childCoverage() int64 {
+	if len(n.Children) == 0 {
+		return 0
+	}
+
+	type interval struct{ start, end int64 }
+	spans := make([]interval, 0, len(n.Children))
+	for _, c := range n.Children {
+		start, end := c.Span.StartNano, c.Span.EndNano
+		if start < n.Span.StartNano {
+			start = n.Span.StartNano
+		}
+		if end > n.Span.EndNano {
+			end = n.Span.EndNano
+		}
+		if end > start {
+			spans = append(spans, interval{start, end})
+		}
+	}
+	if len(spans) == 0 {
+		return 0
+	}
+
+	sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+
+	var covered int64
+	cur := spans[0]
+	for _, s := range spans[1:] {
+		if s.start > cur.end {
+			covered += cur.end - cur.start
+			cur = s
+			continue
+		}
+		if s.end > cur.end {
+			cur.end = s.end
+		}
+	}
+	covered += cur.end - cur.start
+	return covered
 }
 
 func (n *Node) Depth() int {

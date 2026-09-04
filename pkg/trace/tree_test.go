@@ -60,20 +60,102 @@ func TestSelfTime(t *testing.T) {
 	})
 }
 
-func TestSelfTimeConcurrentChildrenClampsToZero(t *testing.T) {
-	root, err := BuildTree(Trace{
-		TraceID: "t1",
-		Spans: []Span{
-			span("s1", "", "fanout", 0, 35),
-			span("s2", "s1", "a", 0, 30),
-			span("s3", "s1", "b", 0, 30),
+func TestSelfTimeUsesIntervalUnionNotSum(t *testing.T) {
+	cases := []struct {
+		name  string
+		spans []Span
+		want  int64
+	}{
+		{
+			"fully parallel children",
+			[]Span{
+				span("s1", "", "fanout", 0, 35),
+				span("s2", "s1", "a", 0, 30),
+				span("s3", "s1", "b", 0, 30),
+			},
+			5,
 		},
-	})
+		{
+			"partially overlapping children",
+			[]Span{
+				span("s1", "", "fanout", 0, 100),
+				span("s2", "s1", "a", 10, 50),
+				span("s3", "s1", "b", 40, 80),
+			},
+			30,
+		},
+		{
+			"sequential children still subtract fully",
+			[]Span{
+				span("s1", "", "fanout", 0, 100),
+				span("s2", "s1", "a", 10, 40),
+				span("s3", "s1", "b", 50, 90),
+			},
+			30,
+		},
+		{
+			"child contained within another",
+			[]Span{
+				span("s1", "", "fanout", 0, 100),
+				span("s2", "s1", "a", 10, 90),
+				span("s3", "s1", "b", 20, 30),
+			},
+			20,
+		},
+		{
+			"child extending past parent is clipped",
+			[]Span{
+				span("s1", "", "fanout", 0, 50),
+				span("s2", "s1", "a", 10, 200),
+			},
+			10,
+		},
+		{
+			"zero width child",
+			[]Span{
+				span("s1", "", "fanout", 0, 50),
+				span("s2", "s1", "a", 10, 10),
+			},
+			50,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root, err := BuildTree(Trace{TraceID: "t1", Spans: tc.spans})
+			if err != nil {
+				t.Fatalf("BuildTree: %v", err)
+			}
+			if got := root.SelfTime(); got != tc.want {
+				t.Errorf("self time = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSelfTimeChildOrderIndependent(t *testing.T) {
+	forward := []Span{
+		span("s1", "", "fanout", 0, 100),
+		span("s2", "s1", "a", 10, 50),
+		span("s3", "s1", "b", 40, 80),
+	}
+	reversed := []Span{
+		span("s1", "", "fanout", 0, 100),
+		span("s3", "s1", "b", 40, 80),
+		span("s2", "s1", "a", 10, 50),
+	}
+
+	a, err := BuildTree(Trace{TraceID: "t1", Spans: forward})
 	if err != nil {
 		t.Fatalf("BuildTree: %v", err)
 	}
-	if got := root.SelfTime(); got != 0 {
-		t.Errorf("self time = %d, want 0", got)
+	b, err := BuildTree(Trace{TraceID: "t2", Spans: reversed})
+	if err != nil {
+		t.Fatalf("BuildTree: %v", err)
+	}
+
+	if a.SelfTime() != b.SelfTime() {
+		t.Errorf("self time depends on span order: %d vs %d", a.SelfTime(), b.SelfTime())
 	}
 }
 
