@@ -32,6 +32,33 @@ compared 300 before traces against 300 after traces
 
 `checkout` and `inventory.check` both gained the same 177.7ms of wall time. Neither is the cause.
 
+## Pipeline
+
+```mermaid
+flowchart TD
+    files["trace JSON files"]
+    jaeger["Jaeger /api/traces"]
+    adapter["pkg/adapter<br/>micros to nanos, CHILD_OF refs<br/>service-qualified span names"]
+    tree["pkg/trace<br/>flat spans to tree<br/>path keys, interval-union self time"]
+    beforeS["pkg/sample<br/>before window<br/>self times per path"]
+    afterS["pkg/sample<br/>after window<br/>self times per path"]
+    stats["pkg/stats<br/>Welch t-test per path<br/>min-samples and min-delta guards"]
+    bisect["pkg/bisect<br/>self time regressed = culprit<br/>total only = collateral"]
+    report["pkg/report<br/>text or json"]
+
+    files --> adapter
+    jaeger --> adapter
+    adapter --> tree
+    tree --> beforeS
+    tree --> afterS
+    beforeS --> stats
+    afterS --> stats
+    stats --> bisect
+    bisect --> report
+```
+
+The before/after split happens at the sample layer, not at ingest: both windows go through identical parsing and aggregation and only meet at the significance test. Swapping the data source changes nothing downstream of `pkg/adapter`.
+
 ## How it works
 
 1. **Match spans across samples.** Span and trace IDs are unique per request, so they can't identify "the same operation" in two different traces. The key is the root-to-node path of span names: `checkout>inventory.check>db.query`. Using the full path rather than the bare name matters because the same operation often appears in several places in a call graph, and `cache.get` under `pricing` is not `cache.get` under `inventory`  averaging them together smears a real regression into noise.
