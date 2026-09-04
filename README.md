@@ -67,6 +67,15 @@ go run ./cmd/gendata
 ./latencybisect -before before.json -after after.json -fail   # exit 2 on any finding, for CI
 ```
 
+Or pull straight from Jaeger, taking the hour either side of a deploy:
+
+```sh
+./latencybisect -jaeger http://localhost:16686 -service checkout-api \
+  -deploy 2026-09-03T14:30:00Z -window 1h
+```
+
+Use `-before-start/-before-end/-after-start/-after-end` (RFC3339) for arbitrary windows. Spans come back service-qualified, so a finding names the service to go look at: `inventory-service:db.query`.
+
 Input is a JSON array of traces:
 
 ```json
@@ -91,12 +100,13 @@ The cases that matter: a regressed leaf is reported while its ancestors are not;
 ## Known limitations
 
 - **Concurrent children.** Self time is `duration - sum(children)`, which assumes children don't overlap. With parallel calls it understates self time, and currently clamps at zero rather than going negative. The fix is to subtract the union of child intervals instead of their sum.
-- **No backend adapter yet.** Reads JSON files; a Jaeger/Tempo query layer is the next step.
+- **Microsecond resolution from Jaeger.** Jaeger stores times in microseconds, so sub-microsecond detail is truncated on ingest. Irrelevant at millisecond-scale regressions, but it is why the round-trip test asserts a tolerance rather than equality.
+- **Tempo not supported yet.** Jaeger works; Tempo needs search-then-fetch and OTLP JSON decoding, and drops in behind the same `Source` interface.
 - **Mean-based significance.** Welch's t-test on means catches most regressions but is weakest on exactly the bimodal case argued for above. Comparing tail quantiles would catch more.
 
 ## Next
 
-- Jaeger and Tempo query adapters, with deploy-anchored window selection
+- Tempo query adapter
 - Interval-union self time for concurrent children
 - Quantile comparison alongside the mean test
 - Correlate the identified span with recent deploys and config changes to that service
