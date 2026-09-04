@@ -8,7 +8,7 @@ The hard part isn't spotting slow spans. It's that a slow leaf makes every one o
 
 ## The approach
 
-Compare **self time** (a span's duration minus its children's), not total duration.
+Compare **self time** (a span's duration minus the time its children actually cover), not total duration.
 
 - Total duration regressed  this span *or anything beneath it* got slower.
 - Self time regressed  *this span's own work* got slower.
@@ -99,7 +99,7 @@ The cases that matter: a regressed leaf is reported while its ancestors are not;
 
 ## Known limitations
 
-- **Concurrent children.** Self time is `duration - sum(children)`, which assumes children don't overlap. With parallel calls it understates self time, and currently clamps at zero rather than going negative. The fix is to subtract the union of child intervals instead of their sum.
+- **Async spans.** Work that outlives its parent span (fire-and-forget, background continuations) is clipped to the parent's bounds, so it counts toward coverage only while the parent is open.
 - **Microsecond resolution from Jaeger.** Jaeger stores times in microseconds, so sub-microsecond detail is truncated on ingest. Irrelevant at millisecond-scale regressions, but it is why the round-trip test asserts a tolerance rather than equality.
 - **Tempo not supported yet.** Jaeger works; Tempo needs search-then-fetch and OTLP JSON decoding, and drops in behind the same `Source` interface.
 - **Mean-based significance.** Welch's t-test on means catches most regressions but is weakest on exactly the bimodal case argued for above. Comparing tail quantiles would catch more.
@@ -107,7 +107,6 @@ The cases that matter: a regressed leaf is reported while its ancestors are not;
 ## Next
 
 - Tempo query adapter
-- Interval-union self time for concurrent children
 - Quantile comparison alongside the mean test
 - Correlate the identified span with recent deploys and config changes to that service
 

@@ -11,6 +11,7 @@ type SpanSpec struct {
 	Name       string
 	SelfMean   float64
 	SelfStdDev float64
+	Parallel   bool
 	Children   []SpanSpec
 }
 
@@ -50,9 +51,18 @@ func (g *generator) build(spec SpanSpec, traceID, parentID string, start int64, 
 		StartNano:    start,
 	})
 
-	cursor := start + self/2
+	childStart := start + self/2
+	cursor := childStart
 	for _, child := range spec.Children {
-		cursor = g.build(child, traceID, id, cursor, out)
+		childEnd := g.build(child, traceID, id, childStart, out)
+		if spec.Parallel {
+			if childEnd > cursor {
+				cursor = childEnd
+			}
+			continue
+		}
+		childStart = childEnd
+		cursor = childEnd
 	}
 
 	end := cursor + (self - self/2)
